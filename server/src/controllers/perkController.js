@@ -70,7 +70,48 @@ export async function createPerk(req, res, next) {
 // TODO
 // Update an existing perk by ID and validate only the fields that are being updated 
 export async function updatePerk(req, res, next) {
-  
+  try {
+    // 0) Basic guards
+    if (!req.params.id) {
+      return res.status(400).json({ message: 'Missing id parameter' });
+    }
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({ message: 'No update fields provided' });
+    }
+
+    // 1) Ensure it exists
+    const perk = await Perk.findById(req.params.id);
+    if (!perk) return res.status(404).json({ message: 'Perk not found' });
+
+    // 2) Validate only the fields being updated
+    //    (treat ALL fields as optional for this validate call)
+    const { value, error } = perkSchema.validate(req.body, {
+      abortEarly: false,
+      allowUnknown: false,
+      presence: 'optional',   // <-- key piece
+      stripUnknown: true,
+    });
+
+    if (error) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        details: error.details.map(d => d.message),
+      });
+    }
+
+    // 3) Perform the update
+    Object.assign(perk, value);
+    const updated = await perk.save();
+
+    // 4) Respond
+    return res.status(200).json({ perk: updated });
+  } catch (err) {
+    // Optional: normalize bad ObjectId to 400
+    if (err.name === 'CastError') {
+      return res.status(400).json({ message: 'Invalid id format' });
+    }
+    next(err);
+  }
 }
 
 
